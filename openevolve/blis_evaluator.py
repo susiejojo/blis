@@ -30,9 +30,7 @@ CONFIGS_TO_BLIS_ARGS_MAPPING = {
 
 @dataclass
 class InferenceRequest:
-    arrival_time: float    # in seconds   
-    input_len: int             
-    output_len: int            
+    arrival_time: float    # in seconds             
     input: str  
     output: str
 
@@ -110,7 +108,7 @@ def call_blis(
     with open(INSTANCE_CONFIG_PATH, "r") as f:
         instance_config = json.load(f)
 
-    traces_filepath = f"traces_instance_{simulator_instance}.csv"
+    traces_filepath = f"blis_traces_instance_{simulator_instance}.csv"
     write_requests_to_csv(requests, traces_filepath, instance_config["model"])
     model_name = instance_config["model"].split("/")[1].lower()
 
