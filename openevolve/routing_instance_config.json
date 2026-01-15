@@ -1,5 +1,5 @@
 {
-    "model": "meta-llama/Llama-3.1-8B-Instruct",
+    "model": "codellama/CodeLlama-34b-Instruct-hf",
     "max-num-batched_tokens": 4096,
     "max-num-seqs": 256,
     "total-kv-blocks": 100000,
