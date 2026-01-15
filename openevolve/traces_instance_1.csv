@@ -1,3 +1,0 @@
-arrived_at,num_prefill_tokens,num_decode_tokens,prefill_tokens,decode_tokens
-0,4,2,"[7251, 920, 526, 366]","[2178, 1781]"
-0.1,2,3,"[22172, 4874]","[512, 278, 2462]"

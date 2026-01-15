@@ -165,7 +165,6 @@ def generate_requests(n=10, start_time=0.0):
         # pick a prompt (cycle if n > num_prompts)
         prompt = prompts[i % len(prompts)]
 
-        input_len = len(prompt.split())
         output_len = random.randint(16, 64)
 
         inp = prompt
@@ -173,8 +172,6 @@ def generate_requests(n=10, start_time=0.0):
 
         req = InferenceRequest(
             arrival_time=round(current_time, 6),
-            input_len=input_len,
-            output_len=output_len,
             input=inp,
             output=out.strip(),
         )
@@ -261,8 +258,8 @@ def evaluate_stage2(program_path):
 
 # if __name__=="__main__":
     # requests = [
-    #     InferenceRequest(arrival_time=0, input_len=4, output_len=2, input="hi how are you", output="All good"),
-    #     InferenceRequest(arrival_time=0.1, input_len=2, output_len=3, input="hello yes", output="In the day"),
+    #     InferenceRequest(arrival_time=0, input="hi how are you", output="All good"),
+    #     InferenceRequest(arrival_time=0.1, input="hello yes", output="In the day"),
     # ] 
 
     requests = generate_requests(n=4800)

@@ -1,3 +1,7 @@
 # BLIS artifacts
 traces_instance_*.csv
 openevolve_output/
+vidur_results_*
+blis_traces_*
+vidur_traces_*
+vidur/
