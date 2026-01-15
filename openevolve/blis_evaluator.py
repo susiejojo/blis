@@ -5,6 +5,14 @@ import os
 import subprocess
 from transformers import AutoTokenizer
 from dataclasses import dataclass
+import importlib.util
+from openevolve.evaluation_result import EvaluationResult
+
+from dataclasses import dataclass
+import csv
+import random
+import time
+random.seed(42)
 
 BLIS_BINARY_PATH = "./simulation_worker"
 INSTANCE_CONFIG_PATH = "routing_instance_config.json"
@@ -107,7 +115,7 @@ def call_blis(
     model_name = instance_config["model"].split("/")[1].lower()
 
     blis_args = ["run"]
-    for k,v, in instance_config.items():
+    for k,v in instance_config.items():
         arg = CONFIGS_TO_BLIS_ARGS_MAPPING[k]
         blis_args.extend([f"--{arg}", str(v)])
     extra_args = {
@@ -128,12 +136,154 @@ def call_blis(
         print(f"ERROR: {e}")
         return float("Inf")
 
-if __name__=="__main__":
-    requests = [
-        InferenceRequest(arrival_time=0, input_len=4, output_len=2, input="hi how are you", output="All good"),
-        InferenceRequest(arrival_time=0.1, input_len=2, output_len=3, input="hello yes", output="In the day"),
-    ] 
+def generate_requests(n=10, start_time=0.0):
+    """
+    - Read prompts from promptsblisopenevolve.txt (separated by blank lines)
+    - Generate arrival times (~5 req/sec)
+    - Random output lengths [16, 256]
+    """
 
-    mean_e2e = call_blis(1, requests)
-    print("Mean E2E:", mean_e2e)
+    def read_prompts(path):
+        with open(path, "r") as f:
+            text = f.read()
+
+        return [
+            p.strip()
+            for p in text.split("\n\n")
+            if p.strip()
+        ]
+    print("--now here")
+    prompts = read_prompts("data/promptsblisopenevolve.txt")
+    print("--now here2")
+    assert prompts, "No prompts found!"
+
+    requests = []
+    current_time = start_time
+
+    for i in range(n):
+        # inter-arrival time (Poisson process)
+        current_time += random.expovariate(5)  # avg 5 req/sec
+
+        # pick a prompt (cycle if n > num_prompts)
+        prompt = prompts[i % len(prompts)]
+
+        input_len = len(prompt.split())
+        output_len = random.randint(16, 64)
+
+        inp = prompt
+        out = "x " * output_len  # simple synthetic output
+
+        req = InferenceRequest(
+            arrival_time=round(current_time, 6),
+            input_len=input_len,
+            output_len=output_len,
+            input=inp,
+            output=out.strip(),
+        )
+        requests.append(req)
+
+    return requests
+
+# -----------------------------
+# OpenEvolve evaluator
+# -----------------------------
+requests = generate_requests(n=4800)
+
+def evaluate(program_path):
+    try:
+        # load evolved router
+        spec = importlib.util.spec_from_file_location("program", program_path)
+        program = importlib.util.module_from_spec(spec)
+        spec.loader.exec_module(program)
+
+        router = program.run_search()
+
+        print("----called here")
+        
+        # print(requests)
+        # for req
+        policy = router(requests, num_sims=2)
+
+        # safety guard
+        if not isinstance(policy, list) or len(policy) != len(requests):
+            print(0/0)
+            return EvaluationResult(
+                metrics={"score": -1e9},
+                artifacts={"error": "Invalid routing policy"}
+            )
+
+        # split requests
+        buckets = [[], []]
+        for req, sim_id in zip(requests, policy):
+            buckets[int(sim_id)].append(req)
+
+        # run simulators
+        lat0 = call_blis(0,buckets[0])
+        lat1 = call_blis(1,buckets[1])
+       
+        total_latency = lat0 + lat1
+        avg_latency = total_latency / 2 # len(requests)
+
+        # OpenEvolve maximizes score → minimize latency
+        score = -avg_latency
+
+        return EvaluationResult(
+            metrics={"score": score},
+            artifacts={
+                "avg_latency": avg_latency,
+                "sim0_requests": len(buckets[0]),
+                "sim1_requests": len(buckets[1]),
+            }
+        )
+
+    except Exception as e:
+        return EvaluationResult(
+            metrics={"score": -1e9},
+            artifacts={"error": str(e)}
+        )
+
+
+def evaluate_stage1(program_path):
+    return evaluate(program_path)
+
+
+def evaluate_stage2(program_path):
+    return evaluate(program_path)
+
+
+# def router(requests, num_sims=2):
+#     """
+#     Returns a list of simulator IDs, one per request.
+#     """
+#     policy = []
+#     for req in requests:
+#         # initial dumb policy (random)
+#         policy.append(random.randint(0, num_sims - 1))
+#     return policy
+
+# if __name__=="__main__":
+    # requests = [
+    #     InferenceRequest(arrival_time=0, input_len=4, output_len=2, input="hi how are you", output="All good"),
+    #     InferenceRequest(arrival_time=0.1, input_len=2, output_len=3, input="hello yes", output="In the day"),
+    # ] 
+
+    requests = generate_requests(n=4800)
+    policy = router(requests, 2)
+
+    # split requests
+    buckets = [[], []]
+    for req, sim_id in zip(requests, policy):
+        buckets[int(sim_id)].append(req)
+
+    # run simulators
+    lat0 = call_blis(0,buckets[0])
+    lat1 = call_blis(1,buckets[1])
+    print("lat0: ", lat0 , "for req: ", len(buckets[0]))
+    print("lat1: ", lat1 , "for req: ", len(buckets[1]))
+
     
+    total_latency = lat0 + lat1
+    avg_latency = total_latency / 2
+
+    # mean_e2e = call_blis(1, requests)
+    print("Mean E2E:", avg_latency)

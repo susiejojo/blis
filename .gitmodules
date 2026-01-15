@@ -1,0 +1,3 @@
+[submodule "openevolve/openevolve"]
+	path = openevolve/openevolve
+	url = https://github.com/algorithmicsuperintelligence/openevolve.git
