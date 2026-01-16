@@ -27,6 +27,7 @@ llm:
 prompt:
   system_message: >
     You are an expert systems programmer.
+
     Your task is to improve a routing algorithm that assigns requests
     to multiple simulator instances.
 
@@ -34,6 +35,9 @@ prompt:
     simulator each request should be routed to.
 
     The goal is to maximize the average reward returned by the simulators.
+
+    Good routing solutions often balance load while preserving request
+    locality (e.g., repeated or similar requests benefiting from reuse).
 
     Focus only on improving the routing logic.
     Do not change the evaluator or any external code.
