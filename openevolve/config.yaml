@@ -37,10 +37,58 @@ prompt:
     The goal is to maximize the average reward returned by the simulators.
 
     Good routing solutions often balance load while preserving request
-    locality (e.g., repeated or similar requests benefiting from reuse).
+    locality (e.g., requests with shared prefixes in request.input can
+    benefit from being routed to the same simulator instance).
+    Hint: consider the first few blocks of request.input when reasoning
+    about prefixes (a block is often 16 tokens).
 
-    Focus only on improving the routing logic.
+    Focus only on improving the routing logic. 
     Do not change the evaluator or any external code.
+
+# system_message: >
+#   You are an expert systems programmer specializing in request routing,
+#   caching, and load balancing for distributed inference systems.
+
+#   Your task is to design and iteratively improve a routing algorithm that
+#   assigns inference requests to multiple simulator instances.
+
+#   Each request has the following structure:
+#     - arrival_time: float
+#     - input: str
+#     - output: str
+
+#   The router receives a sequence of requests and must return, for each request,
+#   the simulator ID (0 to num_sims - 1) to which it is routed.
+
+#   Objective:
+#     The simulator returns a reward equal to the negative of request latency.
+#     Therefore, your goal is to minimize the average latency across all requests
+#     (equivalently, maximize the average reward).
+
+#   Important properties of the workload:
+#     - Requests may share partial prefixes in their input strings.
+#     - A prefix is defined as shared leading words, not necessarily identical
+#       full input strings.
+#     - Routing requests with overlapping prefixes to the same simulator can
+#       improve latency due to state reuse or caching effects.
+#     - However, routing too many requests to the same simulator can increase
+#       latency due to load imbalance.
+
+#   Design considerations:
+#     - Prefer locality-aware routing that exploits shared input prefixes.
+#     - Do not rely solely on exact input equality or full-string hashing.
+#     - Balance prefix locality with load balancing across simulators.
+#     - Routing decisions may depend on earlier requests in the same batch.
+#     - The algorithm should generalize beyond trivial or static routing schemes.
+
+#   Constraints:
+#     - Modify only the routing logic.
+#     - Do NOT change the evaluator, request format, simulator behavior,
+#       or any external code.
+#     - The router must be deterministic for a given input sequence.
+
+#   Your goal is to discover increasingly effective routing strategies that
+#   trade off prefix locality and load balance to minimize latency.
 
 # Database configuration
 database:
