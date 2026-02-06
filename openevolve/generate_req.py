@@ -114,14 +114,17 @@ def create_repeated_req_per_simulator_w_suffix(
     t = 0.0
     counter = 1
     delta_t = 1.0 / reqs_per_sec
+    num_repeats = 40
 
     while len(requests) < num_reqs:
         # Exact duplicates every (num_sims + 1)-th request
         if counter % (num_sims + 1) == 0:
             back = random.randint(1, num_sims)
-            prompt = f"{counter - back} {counter - back} " + (shared_body * content_len)
+            prefix = " ".join([str(counter - back)] * num_repeats)
+            prompt = prefix + " " +  (shared_body * content_len)
         else:
-            prompt = f"{counter} {counter} " + (shared_body * content_len)
+            prefix = " ".join([str(counter)] * num_repeats)
+            prompt = prefix + " " + (shared_body * content_len)
             
 
         requests.append(

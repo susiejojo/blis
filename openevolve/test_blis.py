@@ -320,50 +320,6 @@ def random_word(min_len=2, max_len=3):
 def random_words(n):
     return " ".join(random_word() for _ in range(n))
 
-def generate_requests_dummy(n=100, seed=42, reqpersec = 10):
-    """
-    - Prefix length: range of WORDS
-    - Prefix words: completely random
-    - High prefix reuse to show routing benefit
-    - ~10–20 req/s (bursty arrivals)
-    """
-    random.seed(seed)
-
-    print("creating random requests of", n)
-
-    num_prefixes = 4  # SMALL pool → heavy reuse
-    prefix_pool = []
-
-    # ---- Create reusable random prefixes ----
-    for _ in range(num_prefixes):
-        prefix_len = random.randint(400, 800)
-        prefix_pool.append(random_words(prefix_len))
-
-    requests = []
-    t = 0.0
-
-    for i in range(n):
-        # Heavy prefix reuse
-        prefix = random.choice(prefix_pool)
-
-        # Long, variable suffix (noise / continuation)
-        suffix_len = random.randint(2, 10)
-        suffix = random_words(suffix_len)
-
-        req = InferenceRequest(
-            arrival_time=t,
-            input=prefix + " " + suffix,
-            output=random_words(1)
-        )
-
-        requests.append(req)
-
-        # Inter-arrival time
-        # Mean ≈ 0.07–0.1 sec → ~10–15 req/s
-        t += random.expovariate(reqpersec)
-
-    return requests
-
 import hashlib
 
 def extract_prefix(request, n_words=20):
@@ -588,142 +544,6 @@ def test_routers(num_sims=2):
             print(f"sim{i}: {counts[i]} reqs, lat{i} = {latencies[i]:.3f}")
         print(f"avg latency: {avg_lat:.3f}")
 
-def generate_requests_dummy_roundrobin(n=100, seed=42, reqpersec = 10):
-    """
-    - Prefix length: range of WORDS
-    - Prefix words: completely random
-    - High prefix reuse to show routing benefit
-    - ~10–20 req/s (bursty arrivals)
-    """
-    random.seed(seed)
-
-    print("creating random requests of", n)
-
-    num_prefixes = 4  # SMALL pool → heavy reuse
-    prefix_pool = []
-
-    # ---- Create reusable random prefixes ----
-    for _ in range(num_prefixes):
-        prefix_len = random.randint(100, 250)
-        prefix_pool.append(random_words(prefix_len))
-
-    requests = []
-    t = 0.0
-
-    # ["prefix1", "p2", "p3", "p4", "prefix1"
-
-    prefix_pool_counter = 0
-    for i in range(n):
-        # Heavy prefix reuse
-        prefix = prefix_pool[prefix_pool_counter % num_prefixes]
-        prefix_pool_counter = prefix_pool_counter + 1
-
-        # Long, variable suffix (noise / continuation)
-        suffix_len = random.randint(2, 10)
-        suffix = random_words(suffix_len)
-
-        req = InferenceRequest(
-            arrival_time=t,
-            input=prefix + " " + suffix,
-            output=random_words(1)
-        )
-
-        requests.append(req)
-
-        # Inter-arrival time
-        # Mean ≈ 0.07–0.1 sec → ~10–15 req/s
-        t += random.expovariate(reqpersec)
-
-    return requests
-
-def generate_requests_dummy_gpt(n=1000, seed=42, reqpersec=30):
-    random.seed(seed)
-
-    # Heavy prefixes only (force contention)
-    prefix_pool = [
-        random_words(320),
-        random_words(300),
-        random_words(280),
-    ]
-
-    requests = []
-    t = 0.0
-
-    while len(requests) < n:
-        # launch overlapping bursts
-        active_prefixes = random.sample(prefix_pool, k=2)
-
-        burst_len = random.randint(20, 40)
-
-        for i in range(burst_len):
-            for prefix in active_prefixes:
-                if len(requests) >= n:
-                    break
-
-                suffix = random_words(random.randint(2, 5))
-
-                requests.append(
-                    InferenceRequest(
-                        arrival_time=t,
-                        input=prefix + " " + suffix,
-                        output=random_words(1),
-                    )
-                )
-
-            # arrivals collide in time
-            t += random.expovariate(reqpersec * 4)
-
-        # very small gap → overlap persists
-        t += random.uniform(0.05, 0.15)
-
-    return requests
-
-def create_repeated_req_per_set(num_sims=4, num_reqs=200, content_len=5000):
-    """
-    Create a request stream where:
-    - Most requests are unique
-    - Every (num_sims + 1)-th request is an exact duplicate of the previous one
-      (used to test prefix caching + routing stickiness)
-    """
-
-    random.seed(42)
-    shared_body = random_word() + " "
-    output_word = random_word()
-
-    requests = []
-    t = 0.0
-    counter = 1
-
-    while len(requests) < num_reqs:
-        # Create exact duplicates every (num_sims + 1)-th request
-        # e.g. for num_sims=4 → requests 5, 9, 13, ...
-        if counter % (num_sims + 1) == 0:
-            prompt = f"{counter - 1} " + (shared_body * content_len)
-        else:
-            prompt = f"{counter} " + (shared_body * content_len)
-
-        requests.append(
-            InferenceRequest(
-                arrival_time=t,
-                input=prompt,
-                output=output_word,
-            )
-        )
-
-        t += 1
-        counter += 1
-
-    return requests
-
-def create_from_inference_perf(pkl_path="data/inference_requests.pkl"):
-    """Read from inference perf pickle and replay inference prefix dataset"""
-    import pickle
-
-    with open(pkl_path, "rb") as f:
-        requests = pickle.load(f)
-
-    return requests
-
 def test_routers_gpt(num_sims=4):
     routers = {
         "random": router_rand,
@@ -733,32 +553,19 @@ def test_routers_gpt(num_sims=4):
         # # # "prefix_lb": router_prefix_lb,
         # # # "openevolve_vidur_router": openevolve_vidur_router,
         # # # "prefix_hash": router_prefix,
-        # "router_openevolve_blis": router_openevolve_blis,
+        "router_openevolve_blis": router_openevolve_blis,
         "router_llmd": prefix_aware_router,
     }
 
     # requests = create_repeated_req_per_simulator_w_suffix(num_reqs=50, content_len=2000, num_sims=num_sims, reqs_per_sec=1)
-    requests = create_repeated_req_per_simulator_w_suffix(num_reqs=100, content_len=2300, num_sims=num_sims, reqs_per_sec=1)
-    # print(requests)
+    requests = create_repeated_req_per_simulator_w_suffix(num_reqs=90, content_len=1800, num_sims=num_sims, reqs_per_sec=1)
+    tokenizer = AutoTokenizer.from_pretrained("codellama/CodeLlama-34b-Instruct-hf")
     # for req in requests:
-    #     print(req.input, "\n")
-    
-    
-    
-    # # 100
-
-    # 100
-    # 10
-    # 210/3
-
-    # 100
-
-    # 100
-    # 100
-    # 300/3
-
-
-    # requests = create_from_inference_perf()[0:200]
+    #     print(req.input)
+    #     # Tokenize strings into lists of integers
+    #     prefill_tokens = tokenizer.encode(req.input, add_special_tokens=False)
+    #     print(prefill_tokens)
+    # print(requests)
 
     for name, router_fn in routers.items():
 
@@ -801,19 +608,6 @@ def test_routers_gpt(num_sims=4):
 
 if __name__=="__main__":
 
-
-
-    # call_blis(0, requests)
-    # change reqpersec and latency is exactly the same
-    # reqpersec = 1
-    # requests = generate_requests_dummy(n=1000,reqpersec=reqpersec)
-    # lat = call_blis(0, requests)
-    # print("Lat: ", lat, " req: ", len(requests), "reqpersec: ", reqpersec)
-
-    # reqpersec = 100
-    # requests = generate_requests_dummy(n=1000,reqpersec=100)
-    # lat = call_blis(0, requests)
-    # print("Lat: ", lat, " req: ", len(requests), "reqpersec: ", reqpersec)
 
     print("\n\n\n")
 

@@ -91,6 +91,13 @@ def prefix_aware_router(
                 best_score = score
                 best_pod = pod_id
 
+        # =========================
+        # Cold-start fairness (Option 1)
+        # =========================
+        if best_score == 0:
+            # round-robin based on request index
+            best_pod = len(policy) % num_sims
+
         # 4. Route
         policy.append(best_pod)
 
