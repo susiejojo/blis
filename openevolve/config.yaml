@@ -13,37 +13,79 @@ llm:
   # # secondary_model: "gpt-5-nano"
   # secondary_model_weight: 0.2
   # primary_model: "gemini-2.5-flash"
-  primary_model: GCP/gemini-2.5-flash
+  primary_model: Azure/gpt-4.1-mini #GCP/claude-opus-4
   primary_model_weight: 1
   # api_base: "https://generativelanguage.googleapis.com/v1beta/openai/"
   # api_base: "https://api.cerebras.ai/v1"
   # api_base: "https://api.openai.com/v1"
   api_base: https://ete-litellm.ai-models.vpc-int.res.ibm.com
+  additional_drop_params:
+    - top_p
   temperature: 1
   max_tokens: 16000
   timeout: 120
+  # top_p: null 
 
 # Prompt configuration
 prompt:
   system_message: >
-    You are an expert systems programmer.
+    You are an expert systems programmer optimizing a Python request router for LLM inference.
 
-    Your task is to improve a routing algorithm that assigns requests
-    to multiple simulator instances.
+    Goal: minimize end-to-end latency (equivalently maximize the evaluator's combined_score = -avg_latency).
+    Prioritize simple, stable improvements that generalize.
 
-    The algorithm receives a list of requests and must decide which
-    simulator each request should be routed to.
+    Router behavior (do not change external interfaces):
+      - Tokenize req.input
+      - Hash tokens into KV blocks
+      - Score pods based on overlap between request blocks and each pod's KV cache
+      - Route each request to one pod
+      - Update ONLY the chosen pod's KV cache AFTER routing
 
-    The goal is to maximize the average reward returned by the simulators.
+    What you MAY change:
+      - How pods are scored (e.g., prefix-weighted overlap vs. pure longest-prefix)
+      - Tie-breaking rules
+      - Add lightweight load-awareness using only information available inside the router
+      - Use smooth penalties/weights (e.g., proportional to overlap fraction, cache size, or recent assignments)
 
-    Good routing solutions often balance load while preserving request
-    locality (e.g., requests with shared prefixes in request.input can
-    benefit from being routed to the same simulator instance).
-    Hint: consider the first few blocks of request.input when reasoning
-    about prefixes (a block is often 16 tokens).
+    Critical constraints (must follow):
+      - DO NOT add hardcoded thresholds or fixed cutoffs (e.g., "if score >= 2", "if prefix >= 4", etc.).
+        Any decision rule must be scale-free and continuous (ratios, normalized scores, soft penalties).
+      - DO NOT add a second pass that revisits/overrides earlier routing decisions.
+        Routing must be single-pass, online, sequential.
+      - DO NOT introduce randomness (router must be deterministic).
+      - Keep runtime overhead low; avoid O(num_reqs^2) patterns such as recomputing pod_loads by scanning policy each step.
+      - Only edit code inside the EVOLVE-BLOCK.
 
-    Focus only on improving the routing logic. 
-    Do not change the evaluator or any external code.
+    Guidance:
+      - Prefer a combined score like:
+          combined = prefix_weighted_overlap - small_load_penalty
+        where overlap is normalized (e.g., matched_blocks / total_blocks), and load_penalty is normalized (e.g., assigned_so_far / seen_so_far).
+      - Use deterministic tie-breaks that reduce hotspots without destroying locality.
+
+    Output:
+      - Return only the updated code for the EVOLVE-BLOCK with minimal diffs.
+      - Do not add new global state or change function signatures.
+
+
+  # system_message: >
+  #   You are an expert systems programmer.
+
+  #   Your task is to improve a routing algorithm that assigns requests
+  #   to multiple simulator instances.
+
+  #   The algorithm receives a list of requests and must decide which
+  #   simulator each request should be routed to.
+
+  #   The goal is to maximize the average reward returned by the simulators.
+
+  #   Good routing solutions often balance load while preserving request
+  #   locality (e.g., requests with shared prefixes in request.input can
+  #   benefit from being routed to the same simulator instance).
+  #   Hint: consider the first few blocks of request.input when reasoning
+  #   about prefixes (a block is often 16 tokens).
+
+  #   Focus only on improving the routing logic. 
+  #   Do not change the evaluator or any external code.
 
 # system_message: >
 #   You are an expert systems programmer specializing in request routing,
@@ -95,11 +137,11 @@ database:
   population_size: 50
   archive_size: 20
   num_islands: 3
-  elite_selection_ratio: 0.2
-  exploitation_ratio: 0.7
+  elite_selection_ratio: 0.1 # 0.2 - This is too greedy for a flat landscape.
+  exploitation_ratio: 0.4 # 0.7
 
   # embedding_model: "text-embedding-3-small"
-  similarity_threshold: 0.99
+  similarity_threshold: 0.90 # This allows behaviorally similar but structurally different routers to coexist long enough to mutate into something better.
 
 # Evaluator configuration
 evaluator:

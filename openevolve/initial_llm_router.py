@@ -42,12 +42,12 @@ def tokens_to_kv_block_keys(
 
     return block_keys
 
-
+# EVOLVE-BLOCK-START
 def prefix_aware_router(
     requests: List[Any],
     num_sims: int,
-    model_name: str = "codellama/CodeLlama-34b-Instruct-hf",
-    kv_block_size: int = 16,
+    model_name: str = "codellama/CodeLlama-34b-Instruct-hf", # no need to change this - we use default
+    kv_block_size: int = 16, # no need to change this - we use default
 ) -> List[int]:
     """
     Prefix-aware router.
@@ -105,3 +105,9 @@ def prefix_aware_router(
         POD_KV_CACHE[best_pod].update(block_keys)
 
     return policy
+
+# EVOLVE-BLOCK-END
+
+def run_search():
+    # required entry point for evaluator
+    return router

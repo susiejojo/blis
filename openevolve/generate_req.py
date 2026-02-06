@@ -144,6 +144,145 @@ def create_repeated_req_per_simulator_w_suffix(
 
     return requests
 
+def create_high_repeated_decode_heavy(
+    num_sims=4,
+    num_reqs=200,
+    content_len=5000,
+    reqs_per_sec=1.0,
+    cache_dir="req_cache_suffix",
+    prefix_probability = 0.8
+):
+    """
+    Create a request stream where:
+    - Most requests are unique
+    - Every (num_sims + 1)-th request is an exact duplicate of the previous one
+      (used to test prefix caching + routing stickiness)
+
+    Requests are cached to disk (pickle) and reused if available.
+    """
+
+    os.makedirs(cache_dir, exist_ok=True)
+
+    cache_path = os.path.join(
+        cache_dir,
+        f"requests_prefix_decode_heavy_{num_sims}_reqs{num_reqs}_len{content_len}_rps{reqs_per_sec}.pkl"
+    )
+
+    # ---- Load from cache if exists ----
+    if os.path.exists(cache_path):
+        with open(cache_path, "rb") as f:
+            print("retruning from the cache")
+            return pickle.load(f)
+
+    # ---- Otherwise generate requests ----
+    random.seed(42)
+    shared_body = random_word() + " "
+    output_word = random_word()
+
+    requests = []
+    t = 0.0
+    counter = 1
+    delta_t = 1.0 / reqs_per_sec
+    num_repeats = 40
+    shared_prefix_token = "SHARED"
+
+    while len(requests) < num_reqs:
+        # prefoix hjevy
+        if random.random() < prefix_probability:
+            # 70% of requests share the same prefix
+            prefix = " ".join([shared_prefix_token] * num_repeats)
+        else:
+            # 30% are unique (random prefix)
+            prefix = " ".join([random_word()] * num_repeats)
+
+        prompt = prefix + " " + (shared_body * content_len)
+            
+
+        requests.append(
+            InferenceRequest(
+                arrival_time=t,
+                input=prompt + random_words(random.randint(40, 100)),
+                output=random_words(random.randint(1, 400)),
+            )
+        )
+
+        t += delta_t
+        counter += 1
+
+    # ---- Save to cache ----
+    with open(cache_path, "wb") as f:
+        pickle.dump(requests, f)
+
+    return requests
+
+def create_repeated_req(
+    num_sims=4,
+    num_reqs=200,
+    content_len=5000,
+    reqs_per_sec=1.0,
+    cache_dir="req_cache_suffix",
+):
+    """
+    Create a request stream where:
+    - Most requests are unique
+    - Every (num_sims + 1)-th request is an exact duplicate of the previous one
+      (used to test prefix caching + routing stickiness)
+
+    Requests are cached to disk (pickle) and reused if available.
+    """
+
+    os.makedirs(cache_dir, exist_ok=True)
+
+    cache_path = os.path.join(
+        cache_dir,
+        f"requests_all{num_sims}_reqs{num_reqs}_len{content_len}_rps{reqs_per_sec}.pkl"
+    )
+
+    # ---- Load from cache if exists ----
+    if os.path.exists(cache_path):
+        with open(cache_path, "rb") as f:
+            print("retruning from the cache")
+            return pickle.load(f)
+
+    # ---- Otherwise generate requests ----
+    random.seed(42)
+    shared_body = random_word() + " "
+    output_word = random_word()
+
+    requests = []
+    t = 0.0
+    counter = 1
+    delta_t = 1.0 / reqs_per_sec
+    num_repeats = 40
+
+    while len(requests) < num_reqs:
+        # Exact duplicates every (num_sims + 1)-th request
+        # if counter % (num_sims + 1) == 0:
+        #     back = random.randint(1, num_sims)
+        #     prefix = " ".join([str(counter - back)] * num_repeats)
+        #     prompt = prefix + " " +  (shared_body * content_len)
+        # else:
+            # prefix = " ".join([str(counter)] * num_repeats)
+        prompt =  (shared_body * content_len) + " " + (" ".join([random_word()] * num_repeats))
+            
+
+        requests.append(
+            InferenceRequest(
+                arrival_time=t,
+                input=prompt + random_words(random.randint(40, 100)),
+                output=output_word,
+            )
+        )
+
+        t += delta_t
+        counter += 1
+
+    # ---- Save to cache ----
+    with open(cache_path, "wb") as f:
+        pickle.dump(requests, f)
+
+    return requests
+
 
 NUM_SIMS = 2
 REQUESTS = create_repeated_req_per_simulator_w_suffix(num_reqs=100, content_len=2000, num_sims=NUM_SIMS)

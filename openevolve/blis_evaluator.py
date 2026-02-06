@@ -17,7 +17,7 @@ import random
 import time
 import pickle 
 from request_types import InferenceRequest
-from generate_req import create_repeated_req_per_simulator, create_repeated_req_per_simulator_w_suffix
+from generate_req import create_repeated_req_per_simulator, create_repeated_req_per_simulator_w_suffix, create_repeated_req, create_high_repeated_decode_heavy
 
 
 random.seed(42)
@@ -300,10 +300,12 @@ def create_repeated_req_per_set(num_sims=4, num_reqs=200, content_len=5000):
 
     return requests
 
-NUM_SIMS = 2
+NUM_SIMS = 4
 # REQUESTS = create_repeated_req_per_simulator(num_reqs=100, content_len=2000, num_sims=NUM_SIMS)
 # REQUESTS = create_repeated_req_per_simulator_w_suffix(num_reqs=100, content_len=2000, num_sims=NUM_SIMS)
-REQUESTS = create_repeated_req_per_simulator_w_suffix(num_reqs=200, content_len=2000, num_sims=NUM_SIMS, reqs_per_sec=1)
+# REQUESTS = create_repeated_req_per_simulator_w_suffix(num_reqs=212, content_len=2050, num_sims=NUM_SIMS, reqs_per_sec=10)
+# REQUESTS = create_repeated_req(num_reqs=212, content_len=2050, num_sims=NUM_SIMS, reqs_per_sec=10)
+REQUESTS = create_high_repeated_decode_heavy(num_reqs=300, content_len=200, num_sims=NUM_SIMS, reqs_per_sec=15) # random is better than prefix 
 print("reqs", len(REQUESTS))
 def evaluate(program_path):
     try:
@@ -315,10 +317,8 @@ def evaluate(program_path):
         router = program.run_search()
 
         print("----called here")
-        
-        # print(requests)
-        # for req
-        policy = router(REQUESTS, num_sims=2)
+
+        policy = router(REQUESTS, num_sims=NUM_SIMS)
         print(policy)
 
         # safety guard
@@ -331,7 +331,7 @@ def evaluate(program_path):
             )
 
         # split requests
-        buckets = [[], []]
+        buckets = [[] for _ in range(NUM_SIMS)]
         for req, sim_id in zip(REQUESTS, policy):
             buckets[int(sim_id)].append(req)
 
@@ -356,17 +356,6 @@ def evaluate(program_path):
         )
         print("avg:" , avg_latency)
 
-        # run simulators
-        # lat0, req0 = call_blis(0,buckets[0]), len(buckets[0])
-        # lat1, req1 = call_blis(1,buckets[1]), len(buckets[1])
-       
-        # total_latency = lat0*req0 + lat1*req1
-        # avg_latency = total_latency / (req1+req0) # len(requests)
-        
-        # lat0, req0 = call_blis(0, buckets[0]), len(buckets[0])
-        # lat1,req1 = call_blis(1, buckets[1]), len(buckets[1])
-
-        # avg_latency = (lat0*req0 + lat1*req1) / (req0 + req1)
 
         # OpenEvolve maximizes score → minimize latency
         score = -avg_latency

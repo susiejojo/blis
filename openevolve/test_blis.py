@@ -14,7 +14,7 @@ from dataclasses import dataclass
 import csv
 import random
 
-from generate_req import create_repeated_req_per_simulator, create_repeated_req_per_simulator_w_suffix
+from generate_req import create_repeated_req_per_simulator, create_repeated_req_per_simulator_w_suffix, create_repeated_req, create_high_repeated_decode_heavy
 
 from initial_llm_router import prefix_aware_router
 
@@ -128,8 +128,11 @@ def run_go_binary(arguments, go_binary_path):
 
     # Parse into a dictionary, and extract mean E2E
     metrics = json.loads(json_data)
+    # print(metrics)
     mean_e2e = metrics["e2e_mean_ms"]
-    return mean_e2e
+    p90 = metrics["e2e_p90_ms"]
+
+    return mean_e2e, p90
 
 def call_blis(
     simulator_instance: int, # instance ID
@@ -169,11 +172,11 @@ def call_blis(
         blis_args.extend([f"--{key}", str(extra_args[key])])
 
     try:
-        instance_e2e = run_go_binary(blis_args, BLIS_BINARY_PATH)
-        return instance_e2e
+        instance_e2e, p90 = run_go_binary(blis_args, BLIS_BINARY_PATH)
+        return instance_e2e, p90
     except Exception as e:
         print(f"ERROR: {e}")
-        return float("Inf")
+        return float("Inf"),float("Inf")
     
 def call_blis_blackbox(
     simulator_instance: int, # instance ID
@@ -498,67 +501,25 @@ def router_openevolve_blis(requests, num_sims=2):
         
     return policy
 
-def test_routers(num_sims=2):
-    routers = {
-        # "all0": router_always0,
-        "random": router_rand,
-        "round_robin": router_rrb,
-        "prefix_hash": router_prefix,
-        "prefix_lb": router_prefix_lb,
-    }
-
-    requests = generate_requests_dummy_dia(n=1000, reqpersec=30)
-
-    for name, router_fn in routers.items():
-
-        # run router
-        if name == "prefix_lb":
-            policy = router_fn(requests, num_sims, 20)
-        else:
-            policy = router_fn(requests, num_sims)
-
-        # split requests
-        buckets = [[] for _ in range(num_sims)]
-        for req, sim_id in zip(requests, policy):
-            buckets[int(sim_id)].append(req)
-
-        # run simulators
-        latencies = []
-        counts = []
-
-        for sim_id in range(num_sims):
-            reqs = buckets[sim_id]
-            cnt = len(reqs)
-            lat = call_blis(sim_id, reqs) if cnt > 0 else 0.0
-            latencies.append(lat)
-            counts.append(cnt)
-
-        total_reqs = sum(counts)
-        avg_lat = (
-            sum(lat * cnt for lat, cnt in zip(latencies, counts)) / total_reqs
-            if total_reqs > 0 else 0.0
-        )
-
-        print(f"\n=== Router: {name} ===")
-        for i in range(num_sims):
-            print(f"sim{i}: {counts[i]} reqs, lat{i} = {latencies[i]:.3f}")
-        print(f"avg latency: {avg_lat:.3f}")
-
 def test_routers_gpt(num_sims=4):
     routers = {
         "random": router_rand,
-        # "router0": router_always0,
+        "router0": router_always0,
         # # "round_robin": router_rrb,
         
         # # # "prefix_lb": router_prefix_lb,
         # # # "openevolve_vidur_router": openevolve_vidur_router,
         # # # "prefix_hash": router_prefix,
-        "router_openevolve_blis": router_openevolve_blis,
+        # "router_openevolve_blis": router_openevolve_blis,
         "router_llmd": prefix_aware_router,
     }
 
     # requests = create_repeated_req_per_simulator_w_suffix(num_reqs=50, content_len=2000, num_sims=num_sims, reqs_per_sec=1)
-    requests = create_repeated_req_per_simulator_w_suffix(num_reqs=90, content_len=1800, num_sims=num_sims, reqs_per_sec=1)
+    # requests = create_repeated_req(num_reqs=93, content_len=1700, num_sims=num_sims, reqs_per_sec=20)
+    # requests = create_high_repeated_decode_heavy(num_reqs=120, content_len=2, num_sims=num_sims, reqs_per_sec=10) # decode heavy but prefix 80% - so prefix aware does bad job
+
+    num_sims = 4
+    requests = create_high_repeated_decode_heavy(num_reqs=120, content_len=200, num_sims=num_sims, reqs_per_sec=15)
     tokenizer = AutoTokenizer.from_pretrained("codellama/CodeLlama-34b-Instruct-hf")
     # for req in requests:
     #     print(req.input)
@@ -584,16 +545,21 @@ def test_routers_gpt(num_sims=4):
 
         # Run simulators
         latencies = []
+        latencies_p90 = []
         counts = []
 
         for sim_id in range(num_sims):
             reqs = buckets[sim_id]
             cnt = len(reqs)
-            lat = call_blis(sim_id, reqs) if cnt > 0 else 0.0
+            lat, p90 = call_blis(sim_id, reqs) if cnt > 0 else (0.0, 0.0)
+            # print(lat,p90)
             # lat = call_blis_blackbox(sim_id, reqs) if cnt > 0 else 0.0
             # lat = call_vidur(sim_id, reqs) if cnt > 0 else 0.0
             latencies.append(lat)
+            latencies_p90.append(p90)
             counts.append(cnt)
+
+        # print("p90", sum(latencies_p90)/sum(counts))
 
         total_reqs = sum(counts)
         avg_lat = (
