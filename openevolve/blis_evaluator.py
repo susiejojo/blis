@@ -304,7 +304,7 @@ NUM_SIMS = 2
 # REQUESTS = create_repeated_req_per_simulator(num_reqs=100, content_len=2000, num_sims=NUM_SIMS)
 # REQUESTS = create_repeated_req_per_simulator_w_suffix(num_reqs=100, content_len=2000, num_sims=NUM_SIMS)
 REQUESTS = create_repeated_req_per_simulator_w_suffix(num_reqs=200, content_len=2000, num_sims=NUM_SIMS, reqs_per_sec=1)
-
+print("reqs", len(REQUESTS))
 def evaluate(program_path):
     try:
         # load evolved router
@@ -319,10 +319,12 @@ def evaluate(program_path):
         # print(requests)
         # for req
         policy = router(REQUESTS, num_sims=2)
+        print(policy)
 
         # safety guard
         if not isinstance(policy, list) or len(policy) != len(REQUESTS):
             # print(0/0)
+            print("ERRR")
             return EvaluationResult(
                 metrics={"score": -1e9},
                 artifacts={"error": "Invalid routing policy"}
@@ -341,6 +343,7 @@ def evaluate(program_path):
             reqs = buckets[sim_id]
             cnt = len(reqs)
             lat = call_blis(sim_id, reqs) if cnt > 0 else 0.0
+            print("lat: ", lat, " cnt: ", cnt)
             # lat = call_blis_blackbox(sim_id, reqs) if cnt > 0 else 0.0
             # lat = call_vidur(sim_id, reqs) if cnt > 0 else 0.0
             latencies.append(lat)
@@ -351,6 +354,7 @@ def evaluate(program_path):
             sum(lat * cnt for lat, cnt in zip(latencies, counts)) / total_reqs
             if total_reqs > 0 else 0.0
         )
+        print("avg:" , avg_latency)
 
         # run simulators
         # lat0, req0 = call_blis(0,buckets[0]), len(buckets[0])

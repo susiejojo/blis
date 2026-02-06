@@ -10,7 +10,7 @@ from request_types import InferenceRequest
 def random_words(n):
     return " ".join(random_word() for _ in range(n))
 
-def random_word(min_len=3, max_len=10):
+def random_word(min_len=3, max_len=3):
     import string
     letters = string.ascii_lowercase
     return "".join(random.choices(letters, k=random.randint(min_len, max_len)))
@@ -118,14 +118,16 @@ def create_repeated_req_per_simulator_w_suffix(
     while len(requests) < num_reqs:
         # Exact duplicates every (num_sims + 1)-th request
         if counter % (num_sims + 1) == 0:
-            prompt = f"{counter - 1} " + (shared_body * content_len)
+            back = random.randint(1, num_sims)
+            prompt = f"{counter - back} {counter - back} " + (shared_body * content_len)
         else:
-            prompt = f"{counter} " + (shared_body * content_len)
+            prompt = f"{counter} {counter} " + (shared_body * content_len)
+            
 
         requests.append(
             InferenceRequest(
                 arrival_time=t,
-                input=prompt + random_words(random.randint(40, 1000)),
+                input=prompt + random_words(random.randint(40, 100)),
                 output=output_word,
             )
         )

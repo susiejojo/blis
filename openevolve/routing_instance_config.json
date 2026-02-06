@@ -2,7 +2,7 @@
     "model": "codellama/CodeLlama-34b-Instruct-hf",
     "max-num-batched_tokens": 4096,
     "max-num-seqs": 256,
-    "total-kv-blocks": 100000,
+    "total-kv-blocks": 2537,
     "GPU": "H100",
     "tp": 1,
     "vllm-version": "vllm/vllm-openai:v0.8.4"
